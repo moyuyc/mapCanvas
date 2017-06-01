@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="initial-scale=1.0" />
+    <title>忆·图</title>
+    <link href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link href="src/popup.css" rel="stylesheet">
+    <script type="text/javascript" src="libs/jquery/jquery.js"></script>
+    <!--<script src="https://cdn.bootcss.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>-->
+    <script type="text/javascript" src="libs/raphael.js"></script>
+    <script type="text/javascript" src="src/jquery.mapCanvas.js"></script>
+    <script type="text/javascript" src="src/jquery.popup.min.js"></script>
+    <script type="text/javascript" src="src/js-yaml.min.js"></script>
+    <style>
+        #map {
+            position: absolute;
+            margin: auto;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+        #console {
+        }
+        .popup-title{
+            border-bottom: 1px solid #bbb;
+            /*text-align: center;*/
+            margin-bottom: 4px;
+        }
+        template, .template{
+            display: none;
+        }
+        .control-color {
+            position: absolute;
+            bottom: 20px;
+            margin: 0;
+            left: 10px;
+            padding-left: 0px;
+            list-style: none;
+        }
+        .control-color span[_id='color'] {
+            width: 10px;
+            height: 10px;
+        }
+        .popup_content img {
+            max-width: 80%;
+            max-height: 75%;
+            display: block;
+            margin: auto;
+        }
+        .popup_cont{
+            position: absolute;
+        }
+    </style>
+</head>
+<body>
+<h3 class="container text-info">
+    <i class="fa fa-map-marker"></i> 忆·图
+    <small>地图记忆生活。</small>
+    <small class="pull-right">
+        <select id="configs-select">
+            <option value="config.yml" selected>墨鱼</option>
+        </select>
+    </small>
+</h3>
+<div id="console"></div>
+<div id="map">
+</div>
+<script>
+    var $configsSelect = $('#configs-select')
+    $configsSelect.on('change', function (e) {
+        resetConfig($(this).find(':selected').val());
+    });
+
+    $(window).on('resize', function (e) {
+        if (!window.mapdata) return;
+        var w = Math.min($(document.body).width(), mapdata.dimension.width);
+        if (w<mapdata.dimension.width) {
+            paintMap(mapdata, config, {
+                width: w
+            });
+            $map.data('width', w);
+        } else if (!$map.data('painted')) {
+            $map.data('painted', true);
+            paintMap(mapdata, config);
+        }
+    });
+
+    $popup = new $.Popup({backOpacity: 0});
+
+    $map = $('#map');
+
+    function resetConfig(url) {
+        $.get("src/configs/"+url, function (config) {
+            config = jsyaml.load(config);
+            var default_config = {
+                "highlight": {
+                    "color": "#BCF",
+                    "areas": ["江西", "江苏", "北京"]
+                }
+            };
+            window.config = $.extend(default_config, config);
+            paintMap(mapdata, config, {width: $map.data('width')});
+        })
+    };
+
+    $.get("src/configs/"+$configsSelect.find(':selected').val(), function (config) {
+        config = jsyaml.load(config);
+        var default_config = {
+            "highlight": {
+                "color": "#BCF",
+                "areas": ["江西", "江苏", "北京"]
+            }
+        };
+        window.config = $.extend(default_config, config);
+
+        $.getJSON('src/chinamap.json', function (data) {
+            window.mapdata = data;
+            $(window).resize();
+        });
+    });
+
+
+    function paintMap(data, config, options) {
+        options = $.extend({
+            onMapInit: function () {
+                paintMapCtl(config);
+            },
+            bubble: function (area) {
+                return area.name + '<br>' + (config.bubbles[area.name] || "");
+            },
+            onAreaClick: function (e) {
+                var me = this;
+//                me.setFillColor(config.highlight.color);
+                if (config.popups[me.name]) {
+                    $popup.open('<div class="popup-title"><i class="fa fa-map-marker"></i> '+me.name+'</div>'
+                        +'<div>'+config.popups[me.name]+'</div>',
+                        'html');
+                }
+            }
+        }, options);
+
+
+        var $mapCanvas = $map.mapCanvas(data, options);
+        $mapCanvas.mapCanvas('areas').forEach(function (area) {
+            var i = -1;
+            if (config.highlight.areas.includes(area.name)) {
+                area.setFillColor(config.highlight.color);
+            } else if ( (i = config.highlight.areas.findIndex(function (a) {return a.name == area.name})) >=0 ) {
+                area.setFillColor(config.highlight.areas[i].color || config.highlight.color);
+            }
+        });
+    }
+    
+    function paintMapCtl(config) {
+        var colorCtl = $('<ul class="control-color">');
+        config.controls.colors.forEach(function (ent) {
+            var tpl = $('#tpl-color-ctl').clone().removeClass('template');
+            tpl.find('[_id="color"]').css('background-color', ent.color);
+            tpl.find('[_id="text"]').text(ent.text);
+            colorCtl.append(tpl);
+        });
+
+        $map.append(colorCtl);
+    }
+    
+</script>
+<li id="tpl-color-ctl" class="template ">
+    <span _id="color" style="display: inline-block;"></span>
+    <span _id="text"></span>
+</li>
+</body>
+</html>
